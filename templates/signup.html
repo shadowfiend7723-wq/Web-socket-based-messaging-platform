@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 720px; margin: auto; }
+        .panel { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        .panel h2 { margin-top: 0; }
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; margin-bottom: 4px; }
+        .input-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+        #messages { min-height: 120px; border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fafafa; overflow-y: auto; max-height: 300px; }
+        #chatForm { display: flex; gap: 8px; margin-top: 12px; }
+        #chatForm input { flex: 1; }
+    </style>
+</head>
+<body>
+        <div class="panel">
+            <h2>Sign Up</h2>
+            <form action="/signup" method="post">
+                <div class="input-group">
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" name="password" required>
+                </div>
+                <button type="submit">Sign Up</button>
+            </form>
+        </div>
+
+</body>
+</html>

@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 720px; margin: auto; }
+        .panel { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        .panel h2 { margin-top: 0; }
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; margin-bottom: 4px; }
+        .input-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+        #messages { min-height: 120px; border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fafafa; overflow-y: auto; max-height: 300px; }
+        #chatForm { display: flex; gap: 8px; margin-top: 12px; }
+        #chatForm input { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h1>WebSocket Chat</h1>
+            {% if request.session.get("username") %}
+                <p>Logged in as <strong>{{ request.session.get("username") }}</strong>.</p>
+            {% else %}
+                <p>Please log in or sign up to start chatting.</p>
+            {% endif %}
+            {% if message %}
+                <p><strong>{{ message }}</strong></p>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>Chat</h2>
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+                <div style="flex:1">
+                    <div id="messages"></div>
+                    <form id="chatForm" onsubmit="event.preventDefault(); sendMessage();">
+                        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" required>
+                        <button type="submit">Send</button>
+                    </form>
+                    <form id="uploadForm" onsubmit="event.preventDefault(); uploadFile();" style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+                        <input type="file" id="fileInput" style="flex:1" required>
+                        <button type="submit">Send File</button>
+                    </form>
+                </div>
+                <div style="width:220px">
+                    <div style="margin-bottom:8px"><strong>Send Mode</strong></div>
+                    <label><input type="radio" name="mode" value="broadcast" checked> Broadcast</label><br>
+                    <label><input type="radio" name="mode" value="private"> Private</label>
+
+                    <div style="margin-top:12px"><strong>Online Users</strong></div>
+                    <select id="userSelect" style="width:100%; margin-top:6px">
+                        <option value="">(select user)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws`);
+        const messages = document.getElementById("messages");
+        const messageInput = document.getElementById("messageInput");
+        const userSelect = document.getElementById("userSelect");
+
+        socket.addEventListener("open", () => {
+            console.log("Connected to WebSocket server");
+            const notice = document.createElement("p");
+            notice.textContent = "Connected to chat server.";
+            notice.style.color = "green";
+            messages.appendChild(notice);
+        });
+
+        socket.addEventListener("message", (event) => {
+            const data = event.data;
+            if (data.startsWith("__USER_LIST__:")) {
+                try {
+                    const payload = JSON.parse(data.replace("__USER_LIST__:", ""));
+                    const users = payload.users || [];
+                    userSelect.innerHTML = '<option value="">(select user)</option>';
+                    users.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u;
+                        opt.textContent = u;
+                        userSelect.appendChild(opt);
+                    });
+                } catch (e) {
+                    console.error('Invalid user list', e);
+                }
+                return;
+            }
+
+            if (data.startsWith("__HISTORY__:")) {
+                try {
+                    const payload = JSON.parse(data.replace("__HISTORY__:", ""));
+                    const messageElement = document.createElement("p");
+                    messageElement.style.color = "#555";
+                    messageElement.style.fontStyle = "italic";
+                    if (payload.subtype === "broadcast") {
+                        messageElement.textContent = `[history] Broadcast from ${payload.from}: ${payload.message}`;
+                    } else {
+                        messageElement.textContent = `[history] PM from ${payload.from}: ${payload.message}`;
+                    }
+                    messages.appendChild(messageElement);
+                    messages.scrollTop = messages.scrollHeight;
+                } catch (e) {
+                    console.error('Invalid history payload', e);
+                }
+                return;
+            }
+
+            if (data.startsWith("__FILE__:")) {
+                try {
+                    const payload = JSON.parse(data.replace("__FILE__:", ""));
+                    renderFileMessage(payload, payload.history === true);
+                } catch (e) {
+                    console.error('Invalid file payload', e);
+                }
+                return;
+            }
+
+            const messageElement = document.createElement("p");
+            messageElement.textContent = data;
+            messages.appendChild(messageElement);
+            messages.scrollTop = messages.scrollHeight;
+        });
+
+        socket.addEventListener("close", () => {
+            const notice = document.createElement("p");
+            notice.textContent = "Disconnected from chat server.";
+            notice.style.color = "red";
+            messages.appendChild(notice);
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || socket.readyState !== WebSocket.OPEN) return;
+
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const to = userSelect.value || null;
+
+            if (mode === 'private' && !to) {
+                alert('Select a user to send a private message to.');
+                return;
+            }
+
+            const payload = { type: mode, to: to, message: message };
+            socket.send(JSON.stringify(payload));
+            messageInput.value = '';
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) return;
+
+            const file = fileInput.files[0];
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const to = userSelect.value || '';
+            if (mode === 'private' && !to) {
+                alert('Select a user to send a private file to.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('to', to);
+            formData.append('private', mode === 'private');
+
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                alert(error.detail || error.message || 'Upload failed');
+                return;
+            }
+
+            fileInput.value = '';
+        }
+
+        function renderFileMessage(payload, isHistory) {
+            const wrapper = document.createElement('div');
+            const header = document.createElement('div');
+            header.style.marginBottom = '4px';
+            header.style.fontWeight = 'bold';
+            header.textContent = isHistory ? `[history] ${payload.from}` : `${payload.from}`;
+            if (payload.to && payload.to !== 'all') {
+                header.textContent += ` → ${payload.to} (private)`;
+            }
+            wrapper.appendChild(header);
+
+            if (payload.content_type && payload.content_type.startsWith('image/')) {
+                const image = document.createElement('img');
+                image.src = `/files/${payload.file_id}`;
+                image.alt = payload.filename;
+                image.style.maxWidth = '100%';
+                image.style.maxHeight = '240px';
+                image.style.display = 'block';
+                image.style.marginBottom = '8px';
+                wrapper.appendChild(image);
+            }
+
+            const link = document.createElement('a');
+            link.href = `/files/${payload.file_id}`;
+            link.target = '_blank';
+            link.textContent = payload.filename;
+            wrapper.appendChild(link);
+            messages.appendChild(wrapper);
+            messages.scrollTop = messages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
