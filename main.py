@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
 
 client= MongoClient("mongodb://localhost:27017/")
-
+  
 db= client["database1"]
 collection1= db["collection1"]
 
